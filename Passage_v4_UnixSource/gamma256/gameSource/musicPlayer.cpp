@@ -7,8 +7,8 @@
 
 
 
-#include <SDL/SDL.h>
-#include <SDL/SDL_audio.h>
+#include <SDL.h>
+#include <SDL_audio.h>
 
 #include <math.h>
 #include <stdlib.h>

@@ -19,7 +19,7 @@
 
 
 // let SDL override our main function with SDLMain
-#include <SDL/SDL_main.h>
+#include <SDL_main.h>
 
 // must do this before SDL include to prevent WinMain linker errors on win32
 int mainFunction( int inArgCount, char **inArgs );
@@ -29,9 +29,12 @@ int main( int inArgCount, char **inArgs ) {
     }
 
 
-#include <SDL/SDL.h>
+#include <SDL.h>
 
-#include "blowUp.h"
+// SDL2 port (see port/ at the top of the repository)
+#include "port/display.h"
+#include "port/touchStick.h"
+#include "port/gameFiles.h"
 #include "World.h"
 #include "map.h"
 #include "score.h"
@@ -56,27 +59,6 @@ int totalImageHeight = height + scoreHeight;
 
 char paused = false;
 char canPause = false;
-
-
-// size of screen for fullscreen mode
-int screenWidth = 640;
-int screenHeight = 480;
-//int screenWidth = 100;
-//int screenHeight = 16;
-
-// blow-up factor when projecting game onto screen
-// Max defined by image size vs screen size.
-// This is the cap for in-game user-directed blowup adjustment.
-int maxBlowUpFactor;
-
-// current blow-up setting
-int blowUpFactor;
-
-
-// step to take when user hits blowUp key
-int blowUpStep = -1;
-// flag to force update of entire screen
-int blowUpChanged = true;
 
 
 char fullScreen = true;
@@ -116,10 +98,11 @@ void catch_int(int sig_num) {
 
 
 
-char getKeyDown( int inKeyCode ) {
+char getKeyDown( SDL_Keycode inKeyCode ) {
     SDL_PumpEvents();
-	Uint8 *keys = SDL_GetKeyState( NULL );
-	return keys[ inKeyCode ] == SDL_PRESSED;
+	const Uint8 *keys = SDL_GetKeyboardState( NULL );
+	return keys[ SDL_GetScancodeFromKey( inKeyCode ) ] == SDL_PRESSED
+        || touchStickHeld( inKeyCode );
     }
 
 
@@ -183,11 +166,16 @@ char waitForKeyOrButton() {
                 case SDL_JOYBUTTONUP:
                 case SDL_KEYDOWN:
                 case SDL_KEYUP:
+                case SDL_FINGERUP:
                     return true;
                     break;
                 // watch for quit event
                 case SDL_QUIT:
                     return false;
+                    break;
+                // window shown, resized or restored: draw the title again
+                case SDL_WINDOWEVENT:
+                    displayRefresh();
                     break;
                 default:
                     break;
@@ -205,134 +193,15 @@ Uint32 *gameImage;
 
 
 
-// flips back buffer onto screen (or updates rect)
-void flipScreen( SDL_Surface *inScreen ) {
-
-    // unlock the screen if necessary
-    if( SDL_MUSTLOCK( inScreen ) ) {
-        SDL_UnlockSurface( inScreen );
-        }
-    
-    if( ( inScreen->flags & SDL_DOUBLEBUF ) == SDL_DOUBLEBUF ) {
-        // need to flip buffer
-        SDL_Flip( inScreen );	
-        }
-    else if( !blowUpChanged ) {
-        // just update center
-
-        // small area in center that we actually draw in, black around it
-        int yOffset = ( inScreen->h - totalImageHeight * blowUpFactor ) / 2;
-        int xOffset = ( inScreen->w - width * blowUpFactor ) / 2;
-        
-        SDL_UpdateRect( inScreen, xOffset, yOffset, 
-                        width * blowUpFactor, 
-                        totalImageHeight * blowUpFactor );	
-        }
-    else {
-        // update the whole thing
-        SDL_UpdateRect( inScreen, 0, 0, inScreen->w, inScreen->h );
-        
-        // reset flag
-        blowUpChanged = false;
-        }
-    
+void flipGameImageOntoScreen() {
+    displayShow( gameImage );
     }
 
-
-
-void lockScreen( SDL_Surface * inScreen ) {
-    // check if we need to lock the screen
-    if( SDL_MUSTLOCK( inScreen ) ) {
-        if( SDL_LockSurface( inScreen ) < 0 ) {
-            printf( "Couldn't lock screen: %s\n", SDL_GetError() );
-            }
-        }
-    }
-
-
-
-void flipGameImageOntoScreen( SDL_Surface *inScreen ) {
-        
-    if( blowUpChanged 
-	&&
-	( inScreen->flags & SDL_DOUBLEBUF ) == SDL_DOUBLEBUF ) {
-   
-        // blow up size has changed, and we are double-buffered
-        // flip onto screen an additional time.
-        // This will cause us to black-out the background in both buffers.
-
-        lockScreen( inScreen );
-	
-	// when blow-up factor changes:
-	// clear screen to prepare for next draw, 
-	// which will be bigger or smaller
-	SDL_FillRect( inScreen, NULL, 0x00000000 );
-        
-	blowupOntoScreen( gameImage, 
-			  width, totalImageHeight, blowUpFactor, inScreen );
-    
-	flipScreen( inScreen );
-        }
-
-    lockScreen( inScreen );
-    if( blowUpChanged ) {
-        SDL_FillRect( inScreen, NULL, 0x00000000 );
-        }
-    blowupOntoScreen( gameImage, 
-		      width, totalImageHeight, blowUpFactor, inScreen );
-    
-    flipScreen( inScreen );
-
-    // we've handled any blow up change
-    blowUpChanged = false;
-    }
-
-
-
-
-
-
-
-SDL_Surface *screen = NULL;
 
 
 // play a complete game, from title screen to end, on screen
 // returns false if player quits
 char playGame();
-
-
-
-void createScreen() {
-    if( screen != NULL ) {
-        // destroy old one first
-        SDL_FreeSurface( screen );
-        }
-
-    int displayW = width * blowUpFactor;
-    int displayH = totalImageHeight * blowUpFactor;
-
-    
-    Uint32 flags = SDL_HWSURFACE | SDL_DOUBLEBUF;
-    if( fullScreen ) {
-        flags = flags | SDL_FULLSCREEN;
-    
-        // use letterbox mode in full screen
-        displayW = screenWidth;
-        displayH = screenHeight;
-        }
-    
-    
-
-    screen = SDL_SetVideoMode( displayW, displayH, 
-                               32, 
-                               flags );
-    
-    if ( screen == NULL ) {
-        printf( "Couldn't set %dx%dx32 video mode: %s\n", displayW, 
-                displayH,
-                SDL_GetError() );
-        }
-    }
 
 
 
@@ -362,30 +231,6 @@ int mainFunction( int inArgCount, char **inArgs ) {
     SDL_ShowCursor( SDL_DISABLE );
 
 
-    // read screen size from settings
-    char widthFound = false;
-    int readWidth = SettingsManager::getIntSetting( "screenWidth", 
-                                                    &widthFound );
-    char heightFound = false;
-    int readHeight = SettingsManager::getIntSetting( "screenHeight", 
-                                                    &heightFound );
-    
-    if( widthFound && heightFound ) {
-        // override hard-coded defaults
-        screenWidth = readWidth;
-        screenHeight = readHeight;
-        }
-    
-    printf( "Screen dimensions for fullscreen mode:  %dx%d\n",
-            screenWidth, screenHeight );
-    
-    // set here, since screenWidth may have changed from default
-    maxBlowUpFactor = screenWidth / width;
-    
-    // default to max
-    blowUpFactor = maxBlowUpFactor;
-
-
     char fullscreenFound = false;
     int readFullscreen = SettingsManager::getIntSetting( "fullscreen",
                                                          &fullscreenFound );
@@ -404,7 +249,15 @@ int mainFunction( int inArgCount, char **inArgs ) {
     
 
 
-    createScreen();
+    if( !prepareGameFiles() ) {
+        return -1;
+        }
+
+    if( !displayOpen( "Passage", width, totalImageHeight, fullScreen ) ) {
+        return -1;
+        }
+
+    touchStickInstall();
     
 
     // try to open joystick
@@ -482,6 +335,7 @@ int mainFunction( int inArgCount, char **inArgs ) {
         SDL_JoystickClose( joystick );
         }
     
+    displayClose();
     SDL_Quit();
 
     return 0;
@@ -602,7 +456,7 @@ char playGame() {
     memcpy( gameImage, titlePixels, 4 * numTitlePixels );
     
 
-    flipGameImageOntoScreen( screen );
+    flipGameImageOntoScreen();
     
 
     char hit = waitForKeyOrButton();
@@ -918,7 +772,7 @@ char playGame() {
             }
             
         
-        flipGameImageOntoScreen( screen );
+        flipGameImageOntoScreen();
         
 
         // done with frame
@@ -966,37 +820,9 @@ char playGame() {
             }
 
         
-        if( getKeyDown( SDLK_b ) ) {
-            // adjust blowup factor
-            blowUpFactor += blowUpStep;
-            
-            if( blowUpFactor > maxBlowUpFactor ) {
-                blowUpStep *= -1;
-                blowUpFactor = maxBlowUpFactor - 1;
-                }
-            
-            if( blowUpFactor < 1 ) {
-                blowUpStep *= -1;
-                blowUpFactor = 2;
-                }
-
-            if( fullScreen ) {                
-                // force redraw of whole screen
-                blowUpChanged = true;
-                }
-            else {
-                // create a new screen using the new size
-                createScreen();
-                }
-
-            }
-
         if( getKeyDown( SDLK_f ) ) {
             // toggle fullscreen mode
-            fullScreen = ! fullScreen;
-            
-            // create a new screen surface (and destroy old one)
-            createScreen();
+            displayToggleFullscreen();
             }
         
             
@@ -1131,6 +957,7 @@ char playGame() {
                     switch( event.key.keysym.sym ) {
                         case SDLK_q:
                         case SDLK_ESCAPE:
+                        case SDLK_AC_BACK:
                             done = true;
                             quit = true;
                             break;
