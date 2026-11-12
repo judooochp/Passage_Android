@@ -791,12 +791,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                                 SDLActivity.mFullscreenModeActive = false;
                             }
                             if (Build.VERSION.SDK_INT >= 28 /* Android 9 (Pie) */) {
-                                // Passage: keep the game out of camera holes and
-                                // notches. Android sizes the window around the
-                                // cutout on every phone model (was SHORT_EDGES).
-                                WindowManager.LayoutParams attributes = window.getAttributes();
-                                attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER;
-                                window.setAttributes(attributes);
+                                window.getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
                             }
                         }
                     } else {
