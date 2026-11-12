@@ -14,11 +14,10 @@
 
 #include <SDL.h>
 
-// Start watching finger events. Call once, after the window exists.
-void touchStickInstall();
-
 // True if the stick is currently holding inKey
-// (SDLK_LEFT, SDLK_RIGHT, SDLK_UP or SDLK_DOWN).
+// (SDLK_LEFT, SDLK_RIGHT, SDLK_UP or SDLK_DOWN). Call from the game thread
+// after SDL_PumpEvents(); it consumes the finger events waiting in SDL's
+// queue to update the stick.
 bool touchStickHeld( SDL_Keycode inKey );
 
 #endif

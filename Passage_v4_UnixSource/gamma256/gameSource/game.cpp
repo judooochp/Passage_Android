@@ -256,8 +256,6 @@ int mainFunction( int inArgCount, char **inArgs ) {
     if( !displayOpen( "Passage", width, totalImageHeight, fullScreen ) ) {
         return -1;
         }
-
-    touchStickInstall();
     
 
     // try to open joystick

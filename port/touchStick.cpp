@@ -2,29 +2,34 @@
 
 #include <math.h>
 
-static const float DEAD_ZONE = 0.04f;   // of the shorter screen side
-static const float LEASH = 0.13f;
-
-// Finger events arrive through an event watch, which on Android runs on the
-// UI thread. Only heldKey is read by the game thread, so only it is atomic.
-static SDL_atomic_t heldKey;
+// Same feel as the web version: there, 14 and 48 CSS px on a phone whose
+// short side is ~412 CSS px.
+static const float DEAD_ZONE = 0.035f;   // of the shorter screen side
+static const float LEASH = 0.12f;
 
 static bool tracking = false;
 static SDL_FingerID trackedFinger;
-static float anchorX, anchorY;   // in units of the shorter screen side
+static float anchorX, anchorY;           // in units of the shorter side
+static SDL_Keycode heldKey = 0;
 
 
-// Convert a finger's normalized (0..1) position to shorter-side units.
+// Finger positions arrive normalized 0..1 across the window's width and
+// height. Passage only runs wide (Android locks it to landscape), so the
+// long side is horizontal; taking the long/short ratio this way stays right
+// even if the window size reported mid-rotation is still the portrait one.
 static void toStickUnits( const SDL_TouchFingerEvent &inFinger,
                           float *outX, float *outY ) {
-    int w = 1, h = 1;
+    float aspect = 1;
     SDL_Window *window = SDL_GetWindowFromID( inFinger.windowID );
     if( window != NULL ) {
+        int w, h;
         SDL_GetWindowSize( window, &w, &h );
+        if( w > 0 && h > 0 ) {
+            aspect = w > h ? (float)w / h : (float)h / w;
+            }
         }
-    float shorter = (float)( w < h ? w : h );
-    *outX = inFinger.x * w / shorter;
-    *outY = inFinger.y * h / shorter;
+    *outX = inFinger.x * aspect;
+    *outY = inFinger.y;
     }
 
 
@@ -39,11 +44,11 @@ static SDL_Keycode directionOf( float inDX, float inDY ) {
     }
 
 
-static int watchFingers( void *inUnused, SDL_Event *inEvent ) {
-    const SDL_TouchFingerEvent &finger = inEvent->tfinger;
+static void handleFinger( const SDL_Event &inEvent ) {
+    const SDL_TouchFingerEvent &finger = inEvent.tfinger;
     float x, y;
 
-    switch( inEvent->type ) {
+    switch( inEvent.type ) {
         case SDL_FINGERDOWN:
             if( !tracking ) {
                 tracking = true;
@@ -65,27 +70,32 @@ static int watchFingers( void *inUnused, SDL_Event *inEvent ) {
                     dx = x - anchorX;
                     dy = y - anchorY;
                     }
-                SDL_AtomicSet( &heldKey, directionOf( dx, dy ) );
+                heldKey = directionOf( dx, dy );
                 }
             break;
 
         case SDL_FINGERUP:
             if( tracking && finger.fingerId == trackedFinger ) {
                 tracking = false;
-                SDL_AtomicSet( &heldKey, 0 );
+                heldKey = 0;
                 }
             break;
         }
-    return 0;
-    }
-
-
-void touchStickInstall() {
-    SDL_AtomicSet( &heldKey, 0 );
-    SDL_AddEventWatch( watchFingers, NULL );
     }
 
 
 bool touchStickHeld( SDL_Keycode inKey ) {
-    return SDL_AtomicGet( &heldKey ) == (int)inKey;
+    // Take any finger events waiting in SDL's queue, in order. Runs on the
+    // game thread, so no locking is needed. (While the title screen waits,
+    // this isn't called, and the title sees the finger events itself.)
+    SDL_Event events[ 32 ];
+    int count;
+    while( ( count = SDL_PeepEvents( events, 32, SDL_GETEVENT,
+                                     SDL_FINGERDOWN, SDL_FINGERMOTION ) )
+           > 0 ) {
+        for( int i = 0; i < count; i++ ) {
+            handleFinger( events[i] );
+            }
+        }
+    return heldKey == inKey;
     }
