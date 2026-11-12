@@ -2,6 +2,7 @@
 <resources>
     <!-- Base application theme. -->
     <style name="AppTheme" parent="android:Theme.NoTitleBar.Fullscreen">
-        <!-- Customize your theme here. -->
+        <!-- Black behind the game while it starts. -->
+        <item name="android:windowBackground">@android:color/black</item>
     </style>
 </resources>
