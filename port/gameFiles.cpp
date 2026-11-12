@@ -29,8 +29,14 @@ static const char *GAME_FILES[] = {
     };
 
 
-// SDL_RWFromFile reads from the APK's assets on Android.
+// Copy one file out of the APK into the current directory (private storage).
 static bool copyAsset( const char *inName ) {
+    // On Android, SDL_RWFromFile looks in private storage *before* the APK.
+    // From the second launch on, it would find last launch's copy and we'd
+    // truncate the file we're reading from. Delete the copy first so the
+    // read comes from the APK.
+    remove( inName );
+
     SDL_RWops *in = SDL_RWFromFile( inName, "rb" );
     if( in == NULL ) {
         printf( "Missing asset %s: %s\n", inName, SDL_GetError() );
