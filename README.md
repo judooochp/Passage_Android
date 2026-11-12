@@ -20,6 +20,9 @@ Put a finger anywhere and slide to walk; keep holding to keep walking, lift to
 stop. Tap to start from the title screen. Back quits. A gamepad's d-pad also
 works.
 
+A credits screen for Jason Rohrer, with a link to his page for the game,
+shows at every launch; tap it to reach the title.
+
 ## How it's put together
 
 The history is in small steps: commit 1 is the untouched v4 source, commit 2
@@ -32,6 +35,7 @@ the SDL2 port, then SDL's Android template unmodified, then the changes to it.
 | `port/touchStick.*` | The swipe-and-hold control |
 | `port/gameFiles.*` | Android only: copies the game's data files out of the APK so the original file code works |
 | `CMakeLists.txt` | Builds the game for desktop or Android |
+| `android/.../PassageActivity.java` | SDL's activity plus the credits screen |
 | `android/` | SDL 2.32.10's `android-project`; SDL itself is a git submodule in `android/app/jni/SDL` |
 | `.github/workflows/build-apk.yml` | Builds the APK on each push and publishes it as the `latest` release |
 

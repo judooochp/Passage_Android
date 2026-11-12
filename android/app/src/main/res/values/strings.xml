@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">Passage</string>
+    <!-- Shown at every launch by PassageActivity. -->
+    <string name="credits">PASSAGE\n
+A game by Jason Rohrer, 2007\n\n
+Rohrer placed Passage in the public domain.
+His page for the game, with donation information:\n
+https://hcsoftware.sourceforge.net/passage/\n\n
+Slide a finger to walk; hold to keep walking. Sound on.\n
+The game lasts five minutes.\n\n
+This Android port is free and unofficial, and not made or endorsed by Jason Rohrer.\n\n
+Tap to continue</string>
 </resources>
